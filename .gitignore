@@ -1,11 +1,7 @@
-# Maven
+# Maven/SBT
 target
-
-# Gradle
-.gradle
 
 # IntelliJ
 *.iml
 *.ipr
 .idea
-*.bak
