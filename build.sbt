@@ -27,10 +27,8 @@ ThisBuild / organizationName       := "Guanaco"
 
 val commonSettings = Seq(
   publishMavenStyle      := true,
-  bintrayCredentialsFile := Path.userHome / ".bintray" / ".credentials",
-  bintrayOrganization    := Some("guanaco-io"),
-  bintrayRepository      := "maven",
-  bintrayOmitLicense     := true
+  githubOwner            := "guanaco-io",
+  githubRepository       := "camel-redis"
 )
 
 lazy val root = (project in file("."))

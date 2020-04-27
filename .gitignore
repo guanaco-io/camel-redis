@@ -5,3 +5,6 @@ target
 *.iml
 *.ipr
 .idea
+
+# direnv
+.envrc
