@@ -18,6 +18,7 @@ package io.guanaco.camel.redis.impl
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
+import io.guanaco.camel.redis.IdempotentRepositoryFactory
 import org.apache.camel.spi.ExchangeIdempotentRepository
 import org.apache.camel.{Exchange, Expression}
 import org.slf4j.LoggerFactory
@@ -36,6 +37,8 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
   val format = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
   override def add(exchange: Exchange, hash: String): Boolean = withJedis { implicit jedis =>
+    val businessId = expression.evaluate(exchange, classOf[String])
+    exchange.getIn().setHeader(IdempotentRepositoryFactory.BusinessIdHeader, businessId)
     val redisKey = keyFor(exchange)
     if (contains(exchange, hash)) false
     else {
@@ -113,7 +116,7 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
       Logger.warn(s"A default route id got used to determine redis key ${routeName}")
     }
 
-    Option(expression.evaluate(exchange, classOf[String])) match {
+    Option(exchange.getIn().getHeader(IdempotentRepositoryFactory.BusinessIdHeader)) match {
       case Some(id) => s"${contextName}:${routeName}:${id}"
       case None => unableToDetermineBusinssId(exchange)
     }
