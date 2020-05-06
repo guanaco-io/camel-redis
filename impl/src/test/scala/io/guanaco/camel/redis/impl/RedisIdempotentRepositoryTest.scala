@@ -20,7 +20,7 @@ import java.util
 import org.apache.camel.{CamelContext, RoutesBuilder}
 import org.apache.camel.builder.RouteBuilder
 import org.apache.camel.impl.ExplicitCamelContextNameStrategy
-import org.apache.camel.model.language.HeaderExpression
+import org.apache.camel.model.language.{HeaderExpression, SimpleExpression}
 import org.apache.camel.test.AvailablePortFinder
 import org.apache.camel.test.junit4.CamelTestSupport
 import org.junit.Assert._
@@ -36,7 +36,7 @@ class RedisIdempotentRepositoryTest extends CamelTestSupport {
   import io.guanaco.camel.redis.IdempotentRepositoryFactory._
 
   val redisIdempotentRepositoryFactory = new RedisIdempotentRepositoryFactory("0.0.0.0", RedisPort, RedisDatabase)
-  val redisIdempotentRepository = redisIdempotentRepositoryFactory.create(new HeaderExpression(BusinessIdHeader))
+  val redisIdempotentRepository = redisIdempotentRepositoryFactory.create(new SimpleExpression("body"))
 
   val jedis = new Jedis(s"redis://localhost:${RedisPort}/${RedisDatabase}")
 
@@ -96,7 +96,7 @@ class RedisIdempotentRepositoryTest extends CamelTestSupport {
       // format: off
       from(scenario.startEndpoint)
           .routeId(scenario.routeId)
-          .setHeader(BusinessIdHeader, simple("key-is-${body}"))
+          //.setHeader(BusinessIdHeader, simple("key-is-${body}"))
           .idempotentConsumer(body(), redisIdempotentRepository).eager(eager)
             .bean(Helper(), "randomFailure")
             .to("mock:idempotent")

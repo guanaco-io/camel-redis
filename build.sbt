@@ -56,7 +56,7 @@ lazy val api = (project in file("api"))
     OsgiKeys.privatePackage := Nil,
     OsgiKeys.additionalHeaders := Map(
       "Bundle-Name" -> "Guanaco :: Camel Redis :: API",
-    ),
+    )
   )
 
 val packageXml = taskKey[File]("Produces an xml artifact.").withRank(ATask)
