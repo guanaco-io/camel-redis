@@ -17,6 +17,7 @@ package io.guanaco.camel.redis.impl
 
 import java.util
 
+import io.guanaco.camel.redis.impl.RedisIdempotentRepository.processedIdentifier
 import org.apache.camel.{CamelContext, RoutesBuilder}
 import org.apache.camel.builder.RouteBuilder
 import org.apache.camel.impl.ExplicitCamelContextNameStrategy
@@ -82,6 +83,11 @@ class RedisIdempotentRepositoryTest extends CamelTestSupport {
       idempotent.getReceivedCounter <= BatchSize)
     assertEquals("Number of keys in the store should match the number of successfully handled exchanges",
       idempotent.getReceivedCounter, jedis.keys(s"${ContextName}:${scenario.routeId}:*").size())
+
+    import scala.collection.JavaConverters._
+    jedis.keys(s"${ContextName}:${scenario.routeId}:*").asScala foreach  { k =>
+      assertNotNull(jedis.hget(k, processedIdentifier))
+    }
   }
 
   override def createCamelContext(): CamelContext = {
@@ -96,7 +102,6 @@ class RedisIdempotentRepositoryTest extends CamelTestSupport {
       // format: off
       from(scenario.startEndpoint)
           .routeId(scenario.routeId)
-          //.setHeader(BusinessIdHeader, simple("key-is-${body}"))
           .idempotentConsumer(body(), redisIdempotentRepository).eager(eager)
             .bean(Helper(), "randomFailure")
             .to("mock:idempotent")
