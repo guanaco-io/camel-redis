@@ -17,11 +17,12 @@ package io.guanaco.camel.redis.impl
 
 import java.util
 
-import io.guanaco.camel.redis.impl.RedisIdempotentRepository.processedIdentifier
+import io.guanaco.camel.redis.IdempotentRepositoryFactory._
+import io.guanaco.camel.redis.impl.RedisIdempotentRepository._
 import org.apache.camel.{CamelContext, RoutesBuilder}
 import org.apache.camel.builder.RouteBuilder
 import org.apache.camel.impl.ExplicitCamelContextNameStrategy
-import org.apache.camel.model.language.{HeaderExpression, SimpleExpression}
+import org.apache.camel.model.language.SimpleExpression
 import org.apache.camel.test.AvailablePortFinder
 import org.apache.camel.test.junit4.CamelTestSupport
 import org.junit.Assert._
@@ -34,7 +35,6 @@ import scala.util.Random
 class RedisIdempotentRepositoryTest extends CamelTestSupport {
 
   import RedisIdempotentRepositoryTest._
-  import io.guanaco.camel.redis.IdempotentRepositoryFactory._
 
   val redisIdempotentRepositoryFactory = new RedisIdempotentRepositoryFactory("0.0.0.0", RedisPort, RedisDatabase)
   val redisIdempotentRepository = redisIdempotentRepositoryFactory.create(new SimpleExpression("body"))
@@ -85,8 +85,27 @@ class RedisIdempotentRepositoryTest extends CamelTestSupport {
       idempotent.getReceivedCounter, jedis.keys(s"${ContextName}:${scenario.routeId}:*").size())
 
     import scala.collection.JavaConverters._
-    jedis.keys(s"${ContextName}:${scenario.routeId}:*").asScala foreach  { k =>
+    val keys = jedis.keys(s"${ContextName}:${scenario.routeId}:*").asScala
+     keys foreach  { k =>
       assertNotNull(jedis.hget(k, processedIdentifier))
+    }
+
+    all.reset()
+    all.expectedMessageCount(keys.size)
+
+    //get the modified timestamps of the current records
+    val values = keys map { k =>
+      val values = jedis.hget(k, modifiedIdentifier)
+      template.sendBodyAndHeader(scenario.startEndpoint, jedis.hget(k, valueIdentifier), OverrideIdemPotentProcessingHeader, true)
+      values
+    }
+
+    all.assertIsSatisfied()
+
+    //modified timestamps should have changed due to the override header
+    keys map { k =>
+      val processed = jedis.hget(k, modifiedIdentifier)
+      assertFalse(values.contains(processed))
     }
   }
 
