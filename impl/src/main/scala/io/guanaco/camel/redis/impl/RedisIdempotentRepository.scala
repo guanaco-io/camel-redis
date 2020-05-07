@@ -37,8 +37,7 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
   val format = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
   override def add(exchange: Exchange, hash: String): Boolean = withJedis { implicit jedis =>
-    val businessId = expression.evaluate(exchange, classOf[String])
-    exchange.getIn().setHeader(IdempotentRepositoryFactory.BusinessIdHeader, businessId)
+    setBusinessIdHeader(exchange)
     val redisKey = keyFor(exchange)
     if (contains(exchange, hash)) false
     else {
@@ -50,6 +49,7 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
   }
 
   override def contains(exchange: Exchange, hash: String): Boolean = withJedis { implicit jedis =>
+    setBusinessIdHeader(exchange)
     val redisKey = keyFor(exchange)
     Option(jedis.hget(redisKey, valueIdentifier)) match {
       case Some(current) if current == hash => {
@@ -73,6 +73,7 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
   }
 
   private def refresh(key: String): Unit = withJedis { jedis =>
+    jedis.hset(key, processedIdentifier, format.format(ZonedDateTime.now()))
     timeout map { value =>
       jedis.expire(key, value.toSeconds.toInt)
     }
@@ -103,6 +104,11 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
     } finally {
       jedis.close()
     }
+  }
+
+  private def setBusinessIdHeader(exchange: Exchange) = {
+    val businessId = expression.evaluate(exchange, classOf[String])
+    exchange.getIn().setHeader(IdempotentRepositoryFactory.BusinessIdHeader, businessId)
   }
 
   private def keyFor(exchange: Exchange): String = {
@@ -140,6 +146,7 @@ object RedisIdempotentRepository {
   val valueIdentifier = "value"
   val createdIdentifier = "created"
   val modifiedIdentifier = "modified"
+  val processedIdentifier = "processed"
 
   class RedisIdempotentRepositoryOperationFailed(message: String) extends RuntimeException(message)
 
