@@ -18,7 +18,7 @@ package io.guanaco.camel.redis.impl
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-import io.guanaco.camel.redis.IdempotentRepositoryFactory
+import io.guanaco.camel.redis.IdempotentRepositoryFactory._
 import org.apache.camel.spi.ExchangeIdempotentRepository
 import org.apache.camel.{Exchange, Expression}
 import org.slf4j.LoggerFactory
@@ -37,10 +37,9 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
   val format = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
   override def add(exchange: Exchange, hash: String): Boolean = withJedis { implicit jedis =>
-    setBusinessIdHeader(exchange)
-    val redisKey = keyFor(exchange)
     if (contains(exchange, hash)) false
     else {
+      val redisKey = keyFor(exchange)
       Logger.debug(s"Setting value for ${redisKey} to ${hash}")
       hset(redisKey, hash)
       refresh(redisKey)
@@ -49,15 +48,18 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
   }
 
   override def contains(exchange: Exchange, hash: String): Boolean = withJedis { implicit jedis =>
-    setBusinessIdHeader(exchange)
-    val redisKey = keyFor(exchange)
-    Option(jedis.hget(redisKey, valueIdentifier)) match {
-      case Some(current) if current == hash => {
-        Logger.debug(s"Value for ${redisKey} already equals ${hash}")
-        refresh(redisKey)
-        true
+    if(isProcessIdempotency(exchange)) {
+      val redisKey = keyFor(exchange)
+      Option(jedis.hget(redisKey, valueIdentifier)) match {
+        case Some(current) if current == hash => {
+          Logger.debug(s"Value for ${redisKey} already equals ${hash}")
+          refresh(redisKey)
+          true
+        }
+        case _ => false
       }
-      case _ => false
+    } else {
+      false
     }
   }
 
@@ -106,9 +108,17 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
     }
   }
 
-  private def setBusinessIdHeader(exchange: Exchange) = {
-    val businessId = expression.evaluate(exchange, classOf[String])
-    exchange.getIn().setHeader(IdempotentRepositoryFactory.BusinessIdHeader, businessId)
+  /**
+   * Determine business id of the exchange and check whether or not it should be processed
+   * by the idempotency store
+   * @param exchange
+   */
+  private def isProcessIdempotency(exchange: Exchange): Boolean = {
+    if(exchange.getIn.getHeader(BusinessIdHeader, classOf[String]) == null) {
+      val businessId = expression.evaluate(exchange, classOf[String])
+      exchange.getIn().setHeader(BusinessIdHeader, businessId)
+    }
+    !exchange.getIn.getHeader(OverrideIdemPotentProcessingHeader, classOf[Boolean])
   }
 
   private def keyFor(exchange: Exchange): String = {
@@ -122,7 +132,7 @@ private[impl] class RedisIdempotentRepository(pool: JedisPool, expression: Expre
       Logger.warn(s"A default route id got used to determine redis key ${routeName}")
     }
 
-    Option(exchange.getIn().getHeader(IdempotentRepositoryFactory.BusinessIdHeader)) match {
+    Option(exchange.getIn().getHeader(BusinessIdHeader)) match {
       case Some(id) => s"${contextName}:${routeName}:${id}"
       case None => unableToDetermineBusinssId(exchange)
     }

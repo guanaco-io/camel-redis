@@ -42,6 +42,8 @@ object IdempotentRepositoryFactory {
    */
   final val BusinessIdHeader = "GuanacoCamelRedisIdemPotentBusinessId"
 
+  final val OverrideIdemPotentProcessingHeader = "GuanacoCamelRedisOverrideIdemPotentProcessing"
+
   private[redis] final val DefaultExpression = new HeaderExpression(BusinessIdHeader)
 
 }
